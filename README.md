@@ -14,6 +14,8 @@ is just their goals.
 
 One nice thing about gradient is that it is broad and can be applied in many ways.
 1 application i use is for image processing(sketch)
+
+
 Image gradients are a measure of intensity change in an image, and they point in the direction of the greatest rate of change in intensity. 
 Edge detection algorithms like the Sobel operator use these gradients to find the boundaries of objects within images. 
 The concept of thresholding the gradient magnitude to find high intensity gradients.
