@@ -18,7 +18,13 @@ One nice thing about gradient is that it is broad and can be applied in many way
 
 Image gradients are a measure of intensity change in an image, and they point in the direction of the greatest rate of change in intensity. 
 Edge detection algorithms like the Sobel operator use these gradients to find the boundaries of objects within images. 
-The concept of thresholding the gradient magnitude to find high intensity gradients.
+The concept of thresholding the gradient magnitude to find high intensity gradients.(Thresholding the gradient magnitude is a common technique used in image processing to detect edges or changes in intensity in an image.
+
+The gradient of an image measures the change in intensity of the pixels. A high gradient value at a particular pixel position means there is a significant change in color or intensity, indicating the presence of an edge.
+
+The gradient magnitude is calculated as the square root of the sum of the squares of the gradients in the x and y directions. This gives a single value that represents the total rate of change in both directions.
+
+Thresholding is then applied to this gradient magnitude image. This means that all pixels with a gradient magnitude above a certain value (the threshold) are considered edges, while all pixels with a gradient magnitude below this value are not. This results in a binary image where the edges are highlighted.)
 
 ![cute](https://github.com/le-nicolas/Gradient/assets/112614851/b0da6ea7-eedc-49bc-b494-634824bb01b2)  ![output10](https://github.com/le-nicolas/Gradient/assets/112614851/99c957f8-f93d-4f1f-9c5d-764092091ecb)
 
