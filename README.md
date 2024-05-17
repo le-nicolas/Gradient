@@ -1,12 +1,13 @@
 # Gradient
 is used to minimize a function by iteratively moving in the direction of steepest descent of the function's gradient. 
-![Figure_1](https://github.com/le-nicolas/Gradient/assets/112614851/dcabb3e5-355b-4939-8a9d-5113bc6a124b)
+![Figure_1](https://github.com/le-nicolas/Gradient/assets/112614851/dcabb3e5-355b-4939-8a9d-5113bc6a124b)  ![image](https://github.com/le-nicolas/Gradient/assets/112614851/42adefc1-f942-4bce-a6da-9e3a070c1d60)
 
 The great thing about this is it tracks each progress until it has reached its desired iteration.
 It kinda reminds me of newton's-Raphson method, is an iterative numerical method for finding successively better approximations to the roots (or zeroes) of a real-valued function. (in short find the square root via iteration.)
 
 Both of them:
 use iterative processes that update the current estimate based on some calculated adjustment.
+and you can see that the function behaves nicely if its close to its intent.
 
 difference: 
 is just their goals.
