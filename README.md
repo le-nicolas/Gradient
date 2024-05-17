@@ -28,3 +28,4 @@ Thresholding is then applied to this gradient magnitude image. This means that a
 
 ![cute](https://github.com/le-nicolas/Gradient/assets/112614851/b0da6ea7-eedc-49bc-b494-634824bb01b2)  ![output10](https://github.com/le-nicolas/Gradient/assets/112614851/99c957f8-f93d-4f1f-9c5d-764092091ecb)
 
+TL;dr, you just basically need math to do image processing.
