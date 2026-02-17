@@ -333,11 +333,12 @@ h2 {
 }
 
 canvas {
+  display: block;
   width: 100%;
+  height: auto;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #05080d;
-  aspect-ratio: 8 / 5;
 }
 
 @media (max-width: 1180px) {
