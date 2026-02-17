@@ -1,19 +1,19 @@
 const stageSequence = [
   "decode",
   "grayscale",
-  "blur",
-  "sobel",
-  "threshold",
-  "colorize",
+  "vector",
+  "extract",
+  "rank",
+  "paint",
 ];
 
 const stageTitles = {
   decode: "Decode and Fit",
-  grayscale: "Grayscale",
-  blur: "Blur",
-  sobel: "Sobel Gradient",
-  threshold: "Threshold",
-  colorize: "Colorize",
+  grayscale: "Grayscale and Blur",
+  vector: "Gradient Vector Field",
+  extract: "Stroke Extraction",
+  rank: "Goodness Ranking",
+  paint: "Brush Painting",
 };
 
 const fallbackPalette = [
@@ -90,13 +90,24 @@ function syncSliderLabels() {
 }
 
 function loadDemoScene() {
+  const demoImage = new Image();
+  demoImage.onload = () => {
+    applySourceImage(demoImage, "Eiffel Tower demo loaded. Tune controls and paint.");
+  };
+  demoImage.onerror = () => {
+    loadFallbackDemoScene();
+  };
+  demoImage.src = "assets/eiffel-input.jpg";
+}
+
+function loadFallbackDemoScene() {
   const demoCanvas = document.createElement("canvas");
   demoCanvas.width = 1180;
   demoCanvas.height = 760;
   const demoCtx = demoCanvas.getContext("2d");
 
   drawDemoScene(demoCtx, demoCanvas.width, demoCanvas.height);
-  applySourceCanvas(demoCanvas, "Demo scene loaded. Tune controls and run.");
+  applySourceCanvas(demoCanvas, "Demo scene loaded. Tune controls and paint.");
 }
 
 function drawDemoScene(ctx, width, height) {
@@ -200,7 +211,7 @@ function handleFileSelection(event) {
   reader.onload = () => {
     const image = new Image();
     image.onload = () => {
-      applySourceImage(image, `Loaded ${file.name}. Ready to process.`);
+      applySourceImage(image, `Loaded ${file.name}. Ready to paint.`);
     };
     image.src = reader.result;
   };
@@ -239,7 +250,7 @@ function afterSourceUpdated(detail) {
   resetStageStates();
   state.hasOutput = false;
   setProgress(0);
-  setStatus("Ready", detail || "Image prepared. Start the animated process.");
+  setStatus("Ready", detail || "Image prepared. Start the painterly process.");
   elements.downloadButton.disabled = true;
 }
 
@@ -271,74 +282,88 @@ async function runAnimatedPipeline() {
   try {
     const width = elements.sourceCanvas.width;
     const height = elements.sourceCanvas.height;
-    const source = sourceCtx.getImageData(0, 0, width, height);
+    const sourceImage = sourceCtx.getImageData(0, 0, width, height);
+    const sourcePixels = sourceImage.data;
 
-    await runStage(
+    await runStageFrame(
       "decode",
-      source.data,
+      sourcePixels,
       width,
       height,
-      "Image decoded and fit to processing canvas."
+      "Decoded image and prepared analysis canvas."
     );
 
-    const gray = toGrayscale(source.data);
-    await runStage(
-      "grayscale",
-      monoToRgba(gray, width, height),
-      width,
-      height,
-      "Converted RGB channels into luminance."
-    );
-
+    const gray = toGrayscale(sourcePixels);
     const blurRadius = Number(elements.blur.value);
     const blurred = boxBlur(gray, width, height, blurRadius);
-    await runStage(
-      "blur",
+    await runStageFrame(
+      "grayscale",
       monoToRgba(blurred, width, height),
       width,
       height,
-      `Applied box blur (radius ${blurRadius}) to reduce noise.`
+      `Converted to luminance and smoothed with blur radius ${blurRadius}.`
     );
 
-    const sobel = sobelMagnitude(blurred, width, height);
-    const normalized = normalizeMono(
-      sobel.magnitude,
-      sobel.max || 1,
-      Number(elements.sensitivity.value)
-    );
-    await runStage(
-      "sobel",
-      heatToRgba(normalized, width, height),
+    const sensitivity = Number(elements.sensitivity.value);
+    const field = computeGradientField(blurred, width, height, sensitivity);
+    const vectorPreview = renderVectorFieldPreview(field, width, height);
+    await runStageFrame(
+      "vector",
+      vectorPreview,
       width,
       height,
-      "Computed gradient magnitude with Sobel kernels."
+      "Built first-order gradient field and tangent flow (perpendicular direction)."
     );
 
-    const thresholdValue = Number(elements.threshold.value);
-    const mask = thresholdMap(normalized, thresholdValue);
-    await runStage(
-      "threshold",
-      monoToRgba(mask, width, height),
+    const threshold = Number(elements.threshold.value);
+    const brushLoad = Number(elements.glow.value) / 100;
+    const extraction = extractStrokeSet(field, sourcePixels, width, height, {
+      threshold,
+      brushLoad,
+    });
+    const extractionPreview = renderStrokePreview(extraction.strokes, width, height, "extract");
+    await runStageFrame(
+      "extract",
+      extractionPreview,
       width,
       height,
-      `Kept strong gradients above threshold ${thresholdValue}.`
+      `Captured ${extraction.strokes.length} high-gradient paths as candidate strokes.`
     );
 
-    const glow = Number(elements.glow.value) / 100;
-    const colorized = colorizeMap(mask, width, height, state.palette, glow);
-    await runStage(
-      "colorize",
-      colorized,
+    const orderedStrokes = rankAndOrderStrokes(extraction.strokes);
+    const rankPreview = renderStrokePreview(orderedStrokes, width, height, "rank");
+    await runStageFrame(
+      "rank",
+      rankPreview,
       width,
       height,
-      "Mapped edge energy into a palette-aware gradient render."
+      "Ranked by goodness (length x intensity) and reordered by local proximity."
     );
+
+    markStage("paint", "active");
+    setStatus(stageTitles.paint, "Rendering painterly brush strokes.");
+    await paintStrokesAnimated(orderedStrokes, sourcePixels, width, height, {
+      brushLoad,
+      palette: state.palette,
+    });
+    markStage("paint", "done");
+    setProgress(100);
 
     state.hasOutput = true;
-    setStatus("Complete", "Animation finished. Download the PNG or tune and rerun.");
+    if (orderedStrokes.length > 0) {
+      setStatus(
+        "Complete",
+        `Painterly animation finished with ${orderedStrokes.length} strokes.`
+      );
+    } else {
+      setStatus(
+        "Complete",
+        "No strong strokes found at this threshold. Lower threshold to extract more paths."
+      );
+    }
   } catch (error) {
     console.error(error);
-    setStatus("Error", "Processing failed. Try another image and run again.");
+    setStatus("Error", "Painterly process failed. Try another image and run again.");
   } finally {
     state.running = false;
     lockControls(false);
@@ -346,13 +371,13 @@ async function runAnimatedPipeline() {
   }
 }
 
-async function runStage(stageId, rgba, width, height, detail) {
+async function runStageFrame(stageId, rgba, width, height, detail) {
   markStage(stageId, "active");
   setStatus(stageTitles[stageId], detail);
-  await revealFrame(rgba, width, height, 460);
+  await revealFrame(rgba, width, height, 440);
   markStage(stageId, "done");
   setProgress(((stageSequence.indexOf(stageId) + 1) / stageSequence.length) * 100);
-  await wait(160);
+  await wait(130);
 }
 
 function revealFrame(rgba, width, height, duration) {
@@ -382,7 +407,7 @@ function revealFrame(rgba, width, height, duration) {
         revealWidth,
         height
       );
-      resultCtx.fillStyle = "rgba(2, 8, 14, 0.38)";
+      resultCtx.fillStyle = "rgba(2, 8, 14, 0.36)";
       resultCtx.fillRect(revealWidth, 0, width - revealWidth, height);
 
       if (t < 1) {
@@ -446,52 +471,618 @@ function boxBlur(source, width, height, radius) {
   return output;
 }
 
-function sobelMagnitude(source, width, height) {
+function computeGradientField(mono, width, height, sensitivity) {
+  const gx = new Float32Array(width * height);
+  const gy = new Float32Array(width * height);
   const magnitude = new Float32Array(width * height);
-  let max = 0;
+  const normalized = new Float32Array(width * height);
+  const tangentX = new Float32Array(width * height);
+  const tangentY = new Float32Array(width * height);
+
+  let maxMagnitude = 0;
 
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
       const idx = y * width + x;
 
-      const tl = source[idx - width - 1];
-      const tc = source[idx - width];
-      const tr = source[idx - width + 1];
-      const ml = source[idx - 1];
-      const mr = source[idx + 1];
-      const bl = source[idx + width - 1];
-      const bc = source[idx + width];
-      const br = source[idx + width + 1];
+      const tl = mono[idx - width - 1];
+      const tc = mono[idx - width];
+      const tr = mono[idx - width + 1];
+      const ml = mono[idx - 1];
+      const mr = mono[idx + 1];
+      const bl = mono[idx + width - 1];
+      const bc = mono[idx + width];
+      const br = mono[idx + width + 1];
 
-      const gx = -tl - 2 * ml - bl + tr + 2 * mr + br;
-      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
-      const value = Math.hypot(gx, gy);
-      magnitude[idx] = value;
-      if (value > max) {
-        max = value;
+      const gX = -tl - 2 * ml - bl + tr + 2 * mr + br;
+      const gY = -tl - 2 * tc - tr + bl + 2 * bc + br;
+      const mag = Math.hypot(gX, gY);
+
+      gx[idx] = gX;
+      gy[idx] = gY;
+      magnitude[idx] = mag;
+      if (mag > maxMagnitude) {
+        maxMagnitude = mag;
       }
     }
   }
 
-  return { magnitude, max };
+  const magnitudeScale = maxMagnitude || 1;
+  for (let i = 0; i < magnitude.length; i += 1) {
+    const mag = magnitude[i];
+    normalized[i] = clamp((mag / magnitudeScale) * 255 * sensitivity, 0, 255);
+
+    if (mag > 1e-5) {
+      tangentX[i] = -gy[i] / mag;
+      tangentY[i] = gx[i] / mag;
+    }
+  }
+
+  return { gx, gy, magnitude, normalized, tangentX, tangentY };
 }
 
-function normalizeMono(mono, maxValue, sensitivity) {
-  const normalized = new Float32Array(mono.length);
-  const scale = (255 / Math.max(maxValue, 1)) * sensitivity;
-  for (let i = 0; i < mono.length; i += 1) {
-    normalized[i] = clamp(mono[i] * scale, 0, 255);
+function renderVectorFieldPreview(field, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#06111b";
+  ctx.fillRect(0, 0, width, height);
+
+  const stride = clamp(Math.round(Math.min(width, height) / 105), 5, 10);
+  for (let y = 2; y < height - 2; y += stride) {
+    for (let x = 2; x < width - 2; x += stride) {
+      const idx = y * width + x;
+      const strength = field.normalized[idx];
+      if (strength < 18) {
+        continue;
+      }
+
+      const tx = field.tangentX[idx];
+      const ty = field.tangentY[idx];
+      if (tx === 0 && ty === 0) {
+        continue;
+      }
+
+      const t = strength / 255;
+      const color = mixColor([0, 174, 165], [255, 143, 84], t);
+      const length = 1.5 + t * 4.2;
+
+      ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${0.2 + t * 0.72})`;
+      ctx.lineWidth = 0.75 + t * 1.25;
+      ctx.beginPath();
+      ctx.moveTo(x - tx * length, y - ty * length);
+      ctx.lineTo(x + tx * length, y + ty * length);
+      ctx.stroke();
+    }
   }
-  return normalized;
+
+  return ctx.getImageData(0, 0, width, height).data;
 }
 
-function thresholdMap(mono, threshold) {
-  const out = new Float32Array(mono.length);
-  const range = Math.max(1, 255 - threshold);
-  for (let i = 0; i < mono.length; i += 1) {
-    const lifted = mono[i] - threshold;
-    out[i] = lifted > 0 ? (lifted / range) * 255 : 0;
+function extractStrokeSet(field, sourcePixels, width, height, options) {
+  const threshold = clamp(options.threshold, 1, 255);
+  const brushLoad = clamp(options.brushLoad, 0, 1);
+  const lowThreshold = Math.max(4, threshold * 0.45);
+
+  const seedStride = clamp(Math.round(6 - brushLoad * 2.4), 2, 6);
+  const maxStrokes = clamp(
+    Math.round((width * height) / (seedStride * seedStride) * 0.09),
+    260,
+    3200
+  );
+  const maxSteps = clamp(Math.round(36 + brushLoad * 58), 26, 96);
+  const minPoints = clamp(Math.round(5 + brushLoad * 6), 5, 12);
+  const stepSize = 1.05 + brushLoad * 0.25;
+  const occupyRadius = clamp(Math.round(0.8 + brushLoad * 1.4), 1, 2);
+
+  let seeds = collectSeedCandidates(field.normalized, width, height, threshold, seedStride, false);
+  if (seeds.length < 40) {
+    seeds = collectSeedCandidates(
+      field.normalized,
+      width,
+      height,
+      threshold * 0.72,
+      Math.max(2, seedStride - 1),
+      false
+    );
   }
+  seeds.sort((a, b) => b.strength - a.strength);
+
+  const occupied = new Uint8Array(width * height);
+  const strokes = [];
+
+  for (const seed of seeds) {
+    if (strokes.length >= maxStrokes) {
+      break;
+    }
+
+    const seedIndex = seed.y * width + seed.x;
+    if (occupied[seedIndex]) {
+      continue;
+    }
+
+    const stroke = traceStrokeFromSeed(
+      seed.x,
+      seed.y,
+      field,
+      width,
+      height,
+      lowThreshold,
+      maxSteps,
+      stepSize,
+      minPoints
+    );
+    if (!stroke) {
+      continue;
+    }
+
+    stroke.sampleColor = sampleStrokeColor(stroke.points, sourcePixels, width, height);
+    const normIntensity = stroke.avgIntensity / 255;
+    stroke.goodness = stroke.length * Math.pow(normIntensity, 1.3) + stroke.peakIntensity * 0.04;
+
+    strokes.push(stroke);
+    markStrokeOccupied(stroke.points, occupied, width, height, occupyRadius);
+  }
+
+  return { strokes };
+}
+
+function collectSeedCandidates(magnitude, width, height, threshold, stride, requirePeak) {
+  const seeds = [];
+  const t = Math.max(1, threshold);
+
+  for (let y = 2; y < height - 2; y += stride) {
+    for (let x = 2; x < width - 2; x += stride) {
+      const idx = y * width + x;
+      const strength = magnitude[idx];
+      if (strength < t) {
+        continue;
+      }
+      if (requirePeak && !isLocalPeak(magnitude, width, x, y, strength)) {
+        continue;
+      }
+      seeds.push({ x, y, strength });
+    }
+  }
+
+  return seeds;
+}
+
+function isLocalPeak(magnitude, width, x, y, value) {
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      if (ox === 0 && oy === 0) {
+        continue;
+      }
+      if (magnitude[(y + oy) * width + (x + ox)] > value) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function traceStrokeFromSeed(
+  seedX,
+  seedY,
+  field,
+  width,
+  height,
+  lowThreshold,
+  maxSteps,
+  stepSize,
+  minPoints
+) {
+  const forward = followFlow(
+    seedX,
+    seedY,
+    1,
+    field,
+    width,
+    height,
+    lowThreshold,
+    maxSteps,
+    stepSize
+  );
+  const backward = followFlow(
+    seedX,
+    seedY,
+    -1,
+    field,
+    width,
+    height,
+    lowThreshold,
+    maxSteps,
+    stepSize
+  );
+
+  if (forward.length === 0 && backward.length === 0) {
+    return null;
+  }
+
+  const points = backward.slice().reverse();
+  if (forward.length > 0) {
+    points.push(...forward.slice(1));
+  }
+
+  if (points.length < minPoints) {
+    return null;
+  }
+
+  let intensitySum = 0;
+  let peakIntensity = 0;
+  let length = 0;
+  let centroidX = 0;
+  let centroidY = 0;
+
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i];
+    intensitySum += point.strength;
+    peakIntensity = Math.max(peakIntensity, point.strength);
+    centroidX += point.x;
+    centroidY += point.y;
+    if (i > 0) {
+      const prev = points[i - 1];
+      length += Math.hypot(point.x - prev.x, point.y - prev.y);
+    }
+  }
+
+  const avgIntensity = intensitySum / points.length;
+  if (avgIntensity < lowThreshold * 0.92 || length < minPoints) {
+    return null;
+  }
+
+  return {
+    points,
+    length,
+    avgIntensity,
+    peakIntensity,
+    centroid: {
+      x: centroidX / points.length,
+      y: centroidY / points.length,
+    },
+    goodness: 0,
+    strengthRank: 0,
+    sampleColor: [220, 220, 220],
+  };
+}
+
+function followFlow(
+  startX,
+  startY,
+  direction,
+  field,
+  width,
+  height,
+  lowThreshold,
+  maxSteps,
+  stepSize
+) {
+  const points = [];
+  let x = startX;
+  let y = startY;
+  let prevDx = 0;
+  let prevDy = 0;
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    const xi = Math.round(x);
+    const yi = Math.round(y);
+    if (xi < 1 || yi < 1 || xi >= width - 1 || yi >= height - 1) {
+      break;
+    }
+
+    const idx = yi * width + xi;
+    const strength = field.normalized[idx];
+    if (strength < lowThreshold) {
+      break;
+    }
+
+    let dx = field.tangentX[idx];
+    let dy = field.tangentY[idx];
+    if (dx === 0 && dy === 0) {
+      break;
+    }
+
+    if (direction < 0) {
+      dx = -dx;
+      dy = -dy;
+    }
+
+    if (prevDx !== 0 || prevDy !== 0) {
+      if (dx * prevDx + dy * prevDy < 0) {
+        dx = -dx;
+        dy = -dy;
+      }
+      dx = prevDx * 0.4 + dx * 0.6;
+      dy = prevDy * 0.4 + dy * 0.6;
+      const tangentNorm = Math.hypot(dx, dy) || 1;
+      dx /= tangentNorm;
+      dy /= tangentNorm;
+    }
+
+    points.push({ x, y, strength });
+
+    x += dx * stepSize;
+    y += dy * stepSize;
+    prevDx = dx;
+    prevDy = dy;
+  }
+
+  return points;
+}
+
+function markStrokeOccupied(points, occupied, width, height, radius) {
+  const r2 = radius * radius;
+  for (const point of points) {
+    const cx = Math.round(point.x);
+    const cy = Math.round(point.y);
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        if (ox * ox + oy * oy > r2) {
+          continue;
+        }
+        const x = cx + ox;
+        const y = cy + oy;
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+          continue;
+        }
+        occupied[y * width + x] = 1;
+      }
+    }
+  }
+}
+
+function sampleStrokeColor(points, sourcePixels, width, height) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+  const step = Math.max(1, Math.floor(points.length / 12));
+
+  for (let i = 0; i < points.length; i += step) {
+    const x = clamp(Math.round(points[i].x), 0, width - 1);
+    const y = clamp(Math.round(points[i].y), 0, height - 1);
+    const idx = (y * width + x) * 4;
+    r += sourcePixels[idx];
+    g += sourcePixels[idx + 1];
+    b += sourcePixels[idx + 2];
+    count += 1;
+  }
+
+  if (count === 0) {
+    return [220, 220, 220];
+  }
+
+  return [
+    Math.round(r / count),
+    Math.round(g / count),
+    Math.round(b / count),
+  ];
+}
+
+function rankAndOrderStrokes(strokes) {
+  if (strokes.length === 0) {
+    return [];
+  }
+
+  const ranked = [...strokes].sort((a, b) => b.goodness - a.goodness);
+  const peakGoodness = ranked[0].goodness || 1;
+  for (const stroke of ranked) {
+    stroke.strengthRank = clamp(stroke.goodness / peakGoodness, 0, 1);
+  }
+
+  const ordered = [ranked.shift()];
+  const windowSize = 36;
+
+  while (ranked.length > 0) {
+    const anchor = ordered[ordered.length - 1].centroid;
+    const limit = Math.min(windowSize, ranked.length);
+    let bestIndex = 0;
+    let bestCost = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < limit; i += 1) {
+      const stroke = ranked[i];
+      const dist = Math.hypot(anchor.x - stroke.centroid.x, anchor.y - stroke.centroid.y);
+      const strengthPenalty = i * 2.4;
+      const cost = dist + strengthPenalty;
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestIndex = i;
+      }
+    }
+
+    ordered.push(ranked.splice(bestIndex, 1)[0]);
+  }
+
+  return ordered;
+}
+
+function renderStrokePreview(strokes, width, height, mode) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = mode === "extract" ? "#06101a" : "#071322";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  for (const stroke of strokes) {
+    const t = stroke.strengthRank;
+    if (mode === "extract") {
+      ctx.strokeStyle = `rgba(238,247,255,${0.08 + t * 0.44})`;
+      ctx.lineWidth = 0.8 + t * 1.6;
+    } else {
+      const color = mixColor([0, 198, 182], [255, 168, 98], t);
+      ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${0.14 + t * 0.5})`;
+      ctx.lineWidth = 0.9 + t * 2.1;
+    }
+    drawBrushPath(ctx, stroke.points, 0, 0.05);
+    ctx.stroke();
+  }
+
+  return ctx.getImageData(0, 0, width, height).data;
+}
+
+function paintStrokesAnimated(strokes, sourcePixels, width, height, options) {
+  const brushLoad = clamp(options.brushLoad, 0, 1);
+  const total = strokes.length;
+  const startProgress = (stageSequence.indexOf("paint") / stageSequence.length) * 100;
+  const spanProgress = 100 - startProgress;
+
+  const base = createPaintBase(sourcePixels, width, height, options.palette);
+  resultCtx.putImageData(new ImageData(base, width, height), 0, 0);
+
+  if (total === 0) {
+    setProgress(100);
+    return Promise.resolve();
+  }
+
+  const targetDuration = clamp(2400 + total * 2.2, 2600, 8200);
+  let drawn = 0;
+  let startTime = null;
+  let lastStatusUpdate = 0;
+
+  return new Promise((resolve) => {
+    function step(now) {
+      if (startTime === null) {
+        startTime = now;
+      }
+
+      const elapsed = now - startTime;
+      let targetCount = Math.floor((elapsed / targetDuration) * total);
+      targetCount = clamp(targetCount, 0, total);
+      if (targetCount <= drawn) {
+        targetCount = Math.min(total, drawn + Math.max(1, Math.floor(total / 380)));
+      }
+
+      while (drawn < targetCount) {
+        paintStrokeWithBrush(resultCtx, strokes[drawn], brushLoad, options.palette);
+        drawn += 1;
+      }
+
+      setProgress(startProgress + spanProgress * (drawn / total));
+      if (now - lastStatusUpdate > 120 || drawn === total) {
+        setStatus(stageTitles.paint, `Painting strokes ${drawn}/${total} from strong to light.`);
+        lastStatusUpdate = now;
+      }
+
+      if (drawn < total) {
+        requestAnimationFrame(step);
+      } else {
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(step);
+  });
+}
+
+function paintStrokeWithBrush(ctx, stroke, brushLoad, palette) {
+  if (stroke.points.length < 2) {
+    return;
+  }
+
+  const strength = stroke.strengthRank;
+  const sampled = stroke.sampleColor;
+  const accent = mixColor(palette[1], palette[2], 0.25 + strength * 0.65);
+  const bodyColor = mixColor(sampled, accent, 0.36 + strength * 0.34);
+  const darkEdge = mixColor(bodyColor, palette[0], 0.34);
+
+  const baseWidth = 0.9 + brushLoad * 2.4 + strength * 2.8;
+  const baseAlpha = 0.08 + brushLoad * 0.12 + strength * 0.2;
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  ctx.globalCompositeOperation = "source-over";
+  ctx.strokeStyle = rgbaString(darkEdge, baseAlpha * 0.9);
+  ctx.lineWidth = baseWidth * 1.35;
+  drawBrushPath(ctx, stroke.points, 0, 0.16);
+  ctx.stroke();
+
+  const bristlePasses = 2 + Math.round(brushLoad * 4 + strength * 2);
+  for (let i = 0; i < bristlePasses; i += 1) {
+    const center = (bristlePasses - 1) / 2;
+    const offset = (i - center) * (baseWidth / (bristlePasses + 0.8));
+    const toneShift = (Math.random() - 0.5) * 26;
+    const bristleColor = shiftColor(bodyColor, toneShift);
+
+    ctx.strokeStyle = rgbaString(
+      bristleColor,
+      baseAlpha * (0.78 + Math.random() * 0.34)
+    );
+    ctx.lineWidth = Math.max(0.5, baseWidth * (0.24 + Math.random() * 0.23));
+    drawBrushPath(ctx, stroke.points, offset, 0.32 + Math.random() * 0.35);
+    ctx.stroke();
+  }
+
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = rgbaString(mixColor(bodyColor, [255, 255, 255], 0.24), baseAlpha * 0.35);
+  ctx.lineWidth = Math.max(0.45, baseWidth * 0.22);
+  drawBrushPath(ctx, stroke.points, 0, 0.18);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawBrushPath(ctx, points, offset, jitter) {
+  if (points.length < 2) {
+    return;
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i += 1) {
+    const point = displacedPoint(points, i, offset, jitter);
+    if (i === 0) {
+      ctx.moveTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  }
+}
+
+function displacedPoint(points, index, offset, jitter) {
+  const point = points[index];
+  const prev = points[Math.max(0, index - 1)];
+  const next = points[Math.min(points.length - 1, index + 1)];
+  const tangentX = next.x - prev.x;
+  const tangentY = next.y - prev.y;
+  const norm = Math.hypot(tangentX, tangentY) || 1;
+  const normalX = -tangentY / norm;
+  const normalY = tangentX / norm;
+
+  return {
+    x: point.x + normalX * offset + (Math.random() * 2 - 1) * jitter,
+    y: point.y + normalY * offset + (Math.random() * 2 - 1) * jitter,
+  };
+}
+
+function createPaintBase(sourcePixels, width, height, palette) {
+  const out = new Uint8ClampedArray(sourcePixels.length);
+  const dark = palette[0];
+  const mid = palette[1];
+
+  for (let i = 0; i < sourcePixels.length; i += 4) {
+    const r = sourcePixels[i];
+    const g = sourcePixels[i + 1];
+    const b = sourcePixels[i + 2];
+
+    const lum = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 255;
+    const tone = mixColor(dark, mid, 0.16 + lum * 0.36);
+    const grain = ((((i / 4) * 13) % 17) - 8) * 0.35;
+
+    out[i] = clamp(tone[0] * 0.82 + r * 0.12 + grain, 0, 255);
+    out[i + 1] = clamp(tone[1] * 0.82 + g * 0.12 + grain * 0.9, 0, 255);
+    out[i + 2] = clamp(tone[2] * 0.82 + b * 0.12 + grain * 0.7, 0, 255);
+    out[i + 3] = 255;
+  }
+
   return out;
 }
 
@@ -505,66 +1096,6 @@ function monoToRgba(mono, width, height) {
     rgba[p + 3] = 255;
   }
   return rgba;
-}
-
-function heatToRgba(mono, width, height) {
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  const cold = [20, 34, 51];
-  const mid = [3, 169, 156];
-  const hot = [255, 142, 79];
-
-  for (let i = 0, p = 0; i < mono.length; i += 1, p += 4) {
-    const t = clamp(mono[i], 0, 255) / 255;
-    const color =
-      t < 0.5 ? mixColor(cold, mid, t * 2) : mixColor(mid, hot, (t - 0.5) * 2);
-    rgba[p] = color[0];
-    rgba[p + 1] = color[1];
-    rgba[p + 2] = color[2];
-    rgba[p + 3] = 255;
-  }
-  return rgba;
-}
-
-function colorizeMap(mask, width, height, palette, glow) {
-  const out = new Uint8ClampedArray(width * height * 4);
-  const dark = palette[0];
-  const mid = palette[1];
-  const bright = palette[2];
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const idx = y * width + x;
-      const pixel = idx * 4;
-      const edge = clamp(mask[idx], 0, 255) / 255;
-
-      const nx = x / Math.max(width - 1, 1);
-      const ny = y / Math.max(height - 1, 1);
-      const vignette = clamp(1 - Math.hypot(nx - 0.5, ny - 0.5) * 1.25, 0, 1);
-
-      const background = mixColor(dark, mid, 0.14 + 0.28 * vignette);
-      const ramp = edge < 0.5
-        ? mixColor(mid, bright, edge * 2)
-        : mixColor(bright, [255, 249, 220], (edge - 0.5) * 2);
-
-      const energy = Math.pow(edge, 0.82) * (0.58 + glow * 1.25);
-      const grain = ((x * 17 + y * 11) % 23) * 0.18;
-
-      out[pixel] = clamp(background[0] + ramp[0] * energy + grain, 0, 255);
-      out[pixel + 1] = clamp(
-        background[1] + ramp[1] * energy + grain * 0.8,
-        0,
-        255
-      );
-      out[pixel + 2] = clamp(
-        background[2] + ramp[2] * energy + grain * 0.6,
-        0,
-        255
-      );
-      out[pixel + 3] = 255;
-    }
-  }
-
-  return out;
 }
 
 function extractPalette(rgba) {
@@ -607,7 +1138,11 @@ function extractPalette(rgba) {
   }
 
   selected.sort((a, b) => luminance(a) - luminance(b));
-  return [selected[0], selected[Math.floor(selected.length / 2)], selected[selected.length - 1]];
+  return [
+    selected[0],
+    selected[Math.floor(selected.length / 2)],
+    selected[selected.length - 1],
+  ];
 }
 
 function renderPalette(palette) {
@@ -639,6 +1174,18 @@ function mixColor(a, b, t) {
     Math.round(a[1] + (b[1] - a[1]) * t),
     Math.round(a[2] + (b[2] - a[2]) * t),
   ];
+}
+
+function shiftColor(color, delta) {
+  return [
+    clamp(Math.round(color[0] + delta), 0, 255),
+    clamp(Math.round(color[1] + delta * 0.75), 0, 255),
+    clamp(Math.round(color[2] + delta * 0.55), 0, 255),
+  ];
+}
+
+function rgbaString(color, alpha) {
+  return `rgba(${color[0]},${color[1]},${color[2]},${clamp(alpha, 0, 1)})`;
 }
 
 function resetStageStates() {

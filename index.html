@@ -16,11 +16,11 @@
     <main class="app-shell">
       <header class="hero">
         <p class="kicker">Gradient Motion Lab</p>
-        <h1>Photo-to-Gradient Studio With Animated Processing</h1>
+        <h1>Photo-to-Brush Studio With Animated Strokes</h1>
         <p class="hero-copy">
-          Upload a photo and watch each transformation stage build the result in
-          motion. Source and output stay side by side so the change is always
-          clear.
+          Upload a photo and watch an artist-like stroke pass build in motion.
+          Strokes follow flow lines perpendicular to image gradients, ranked from
+          strongest to lightest, while source and output stay side by side.
         </p>
       </header>
 
@@ -69,7 +69,7 @@
               <input id="blur" type="range" min="0" max="6" step="1" value="2" />
             </label>
             <label class="slider-field">
-              <span>Glow</span>
+              <span>Brush Load</span>
               <strong id="glowValue">62%</strong>
               <input id="glow" type="range" min="0" max="100" step="1" value="62" />
             </label>
@@ -93,17 +93,17 @@
 
             <ul id="stageList" class="stage-list">
               <li data-stage="decode">Decode and Fit</li>
-              <li data-stage="grayscale">Grayscale</li>
-              <li data-stage="blur">Blur</li>
-              <li data-stage="sobel">Sobel Gradient</li>
-              <li data-stage="threshold">Threshold</li>
-              <li data-stage="colorize">Colorize</li>
+              <li data-stage="grayscale">Grayscale and Blur</li>
+              <li data-stage="vector">Gradient Vector Field</li>
+              <li data-stage="extract">Stroke Extraction</li>
+              <li data-stage="rank">Goodness Ranking</li>
+              <li data-stage="paint">Brush Painting</li>
             </ul>
           </div>
 
           <div class="button-row">
             <button id="runButton" class="primary-btn" type="button">
-              Run Animated Process
+              Run Painterly Process
             </button>
             <button id="downloadButton" class="ghost-btn" type="button" disabled>
               Download PNG

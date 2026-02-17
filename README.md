@@ -1,39 +1,32 @@
 # Gradient Motion Lab
 
-Gradient Motion Lab is a modern browser tool that turns a photo into an animated gradient map.
+## Eiffel Tower Demo (First Look)
 
-It is designed for:
+![Eiffel Tower run proof](eiffel-proof.png)
 
-- designers who want fast edge-aware visual references
-- creators who want a quick "photo -> stylized gradient" workflow
-- learners who want to see image-gradient processing happen step by step
+| Eiffel Input | Painterly Output |
+| --- | --- |
+| ![Eiffel Tower input](assets/eiffel-input.jpg) | ![Eiffel Tower painterly output](eiffel-output.png) |
+
+Input photo source: [Wikimedia Commons - Tour Eiffel Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tour_Eiffel_Wikimedia_Commons.jpg)
+
+Gradient Motion Lab is a modern browser tool that turns a photo into animated painterly strokes.
 
 ## Features
 
 - Side-by-side layout: source photo on the left, processed result on the right
-- Animated pipeline (not instant output):
+- Animated painterly pipeline (not instant output):
   - Decode and fit
-  - Grayscale
-  - Blur
-  - Sobel gradient
-  - Threshold
-  - Colorized output
-- Live controls for sensitivity, threshold, blur radius, and glow
+  - Grayscale and blur
+  - First-order gradient vector field
+  - Stroke extraction along directions perpendicular to gradients
+  - Goodness ranking by stroke length and intensity
+  - Brush painting from strong strokes to light strokes
+- Spatially coherent ordering so nearby strokes are painted consecutively
+- Live controls for sensitivity, threshold, blur radius, and brush load
 - Palette extraction from the input image
 - PNG export for the generated result
 - Responsive desktop/mobile layout
-
-## Visual Preview
-
-### Full App UI
-
-![Gradient Motion Lab UI](run-proof.png)
-
-### Sample Input vs Output
-
-| Sample Input | Processed Output |
-| --- | --- |
-| ![Sample input image](sample-input.png) | ![Processed gradient output](run-output.png) |
 
 ## Run Locally
 
