@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gradient Motion Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="kicker">Gradient Motion Lab</p>
+        <h1>Photo-to-Gradient Studio With Animated Processing</h1>
+        <p class="hero-copy">
+          Upload a photo and watch each transformation stage build the result in
+          motion. Source and output stay side by side so the change is always
+          clear.
+        </p>
+      </header>
+
+      <section class="workspace" aria-label="Gradient processing workspace">
+        <aside class="panel controls-panel">
+          <div class="block">
+            <h2>Input</h2>
+            <label class="file-picker" for="fileInput">
+              <span>Choose Photo</span>
+              <input id="fileInput" type="file" accept="image/*" />
+            </label>
+            <button id="demoButton" class="ghost-btn" type="button">
+              Use Demo Scene
+            </button>
+          </div>
+
+          <div class="block">
+            <h2>Controls</h2>
+            <label class="slider-field">
+              <span>Sensitivity</span>
+              <strong id="sensitivityValue">1.4x</strong>
+              <input
+                id="sensitivity"
+                type="range"
+                min="0.6"
+                max="2.6"
+                step="0.1"
+                value="1.4"
+              />
+            </label>
+            <label class="slider-field">
+              <span>Threshold</span>
+              <strong id="thresholdValue">88</strong>
+              <input
+                id="threshold"
+                type="range"
+                min="20"
+                max="220"
+                step="1"
+                value="88"
+              />
+            </label>
+            <label class="slider-field">
+              <span>Blur Radius</span>
+              <strong id="blurValue">2</strong>
+              <input id="blur" type="range" min="0" max="6" step="1" value="2" />
+            </label>
+            <label class="slider-field">
+              <span>Glow</span>
+              <strong id="glowValue">62%</strong>
+              <input id="glow" type="range" min="0" max="100" step="1" value="62" />
+            </label>
+          </div>
+
+          <div class="block">
+            <h2>Palette</h2>
+            <div id="palette" class="palette" aria-live="polite"></div>
+          </div>
+
+          <div class="block">
+            <h2>Process</h2>
+            <div class="status">
+              <p id="statusText">Ready</p>
+              <p id="statusDetail">Load an image and run the animated pipeline.</p>
+            </div>
+
+            <div class="progress">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+
+            <ul id="stageList" class="stage-list">
+              <li data-stage="decode">Decode and Fit</li>
+              <li data-stage="grayscale">Grayscale</li>
+              <li data-stage="blur">Blur</li>
+              <li data-stage="sobel">Sobel Gradient</li>
+              <li data-stage="threshold">Threshold</li>
+              <li data-stage="colorize">Colorize</li>
+            </ul>
+          </div>
+
+          <div class="button-row">
+            <button id="runButton" class="primary-btn" type="button">
+              Run Animated Process
+            </button>
+            <button id="downloadButton" class="ghost-btn" type="button" disabled>
+              Download PNG
+            </button>
+          </div>
+        </aside>
+
+        <section class="panel preview-panel">
+          <div class="canvas-grid">
+            <figure class="canvas-card">
+              <figcaption>Source Photo</figcaption>
+              <canvas id="sourceCanvas" width="960" height="600"></canvas>
+            </figure>
+            <figure class="canvas-card">
+              <figcaption>Gradient Output</figcaption>
+              <canvas id="resultCanvas" width="960" height="600"></canvas>
+            </figure>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

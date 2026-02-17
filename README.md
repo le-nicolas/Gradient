@@ -1,34 +1,56 @@
-# Gradient
-is used to minimize a function by iteratively moving in the direction of steepest descent of the function's gradient. 
-![Figure_1](https://github.com/le-nicolas/Gradient/assets/112614851/dcabb3e5-355b-4939-8a9d-5113bc6a124b)  
+# Gradient Motion Lab
 
-The great thing about this is it tracks each progress until it has reached its desired iteration.
-It kinda reminds me of newton's-Raphson method, is an iterative numerical method for finding successively better approximations to the roots (or zeroes) of a real-valued function. (in short find the square root via iteration.)
+Gradient Motion Lab is a modern browser tool that turns a photo into an animated gradient map.
 
+It is designed for:
 
-![image](https://github.com/le-nicolas/Gradient/assets/112614851/42adefc1-f942-4bce-a6da-9e3a070c1d60)
+- designers who want fast edge-aware visual references
+- creators who want a quick "photo -> stylized gradient" workflow
+- learners who want to see image-gradient processing happen step by step
 
-Both of them:
-use iterative processes that update the current estimate based on some calculated adjustment.
-and you can see that the function behaves nicely if its close to its intent.
+## Features
 
-difference: 
-is just their goals.
+- Side-by-side layout: source photo on the left, processed result on the right
+- Animated pipeline (not instant output):
+  - Decode and fit
+  - Grayscale
+  - Blur
+  - Sobel gradient
+  - Threshold
+  - Colorized output
+- Live controls for sensitivity, threshold, blur radius, and glow
+- Palette extraction from the input image
+- PNG export for the generated result
+- Responsive desktop/mobile layout
 
-One nice thing about gradient is that it is broad and can be applied in many ways.
-1 application i use is for image processing(sketch)
+## Run Locally
 
+This project is fully static and has no build step.
 
-Image gradients are a measure of intensity change in an image, and they point in the direction of the greatest rate of change in intensity. 
-Edge detection algorithms like the Sobel operator use these gradients to find the boundaries of objects within images. 
-The concept of thresholding the gradient magnitude to find high intensity gradients.(Thresholding the gradient magnitude is a common technique used in image processing to detect edges or changes in intensity in an image.
+1. Clone the repository.
+2. Open `index.html` in your browser.
 
-The gradient of an image measures the change in intensity of the pixels. A high gradient value at a particular pixel position means there is a significant change in color or intensity, indicating the presence of an edge.
+For best behavior with local file uploads, you can also serve it:
 
-The gradient magnitude is calculated as the square root of the sum of the squares of the gradients in the x and y directions. This gives a single value that represents the total rate of change in both directions.
+```bash
+python -m http.server 8080
+```
 
-Thresholding is then applied to this gradient magnitude image. This means that all pixels with a gradient magnitude above a certain value (the threshold) are considered edges, while all pixels with a gradient magnitude below this value are not. This results in a binary image where the edges are highlighted.)
+Then open `http://localhost:8080`.
 
-![cute](https://github.com/le-nicolas/Gradient/assets/112614851/b0da6ea7-eedc-49bc-b494-634824bb01b2)  ![output10](https://github.com/le-nicolas/Gradient/assets/112614851/99c957f8-f93d-4f1f-9c5d-764092091ecb)
+## Deploy
 
-TL;dr, you just basically need math to do image processing.
+Deploy directly with GitHub Pages:
+
+1. Push to `main`.
+2. In repository settings, enable Pages from branch `main` and root (`/`).
+3. Your app will be live at:
+
+`https://le-nicolas.github.io/Gradient/`
+
+## Tech
+
+- HTML5
+- CSS3
+- Vanilla JavaScript
+- Canvas API
