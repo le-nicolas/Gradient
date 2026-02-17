@@ -23,6 +23,18 @@ It is designed for:
 - PNG export for the generated result
 - Responsive desktop/mobile layout
 
+## Visual Preview
+
+### Full App UI
+
+![Gradient Motion Lab UI](run-proof.png)
+
+### Sample Input vs Output
+
+| Sample Input | Processed Output |
+| --- | --- |
+| ![Sample input image](sample-input.png) | ![Processed gradient output](run-output.png) |
+
 ## Run Locally
 
 This project is fully static and has no build step.
